@@ -1,0 +1,124 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Map Overlay Control Panel</title>
+    <style>
+        body { font-family: 'Segoe UI', sans-serif; background: #222; color: #fff; display: flex; justify-content: center; align-items: center; height: 100vh; margin: 0; }
+        .control-box { background: #333; padding: 30px; border-radius: 10px; box-shadow: 0 4px 15px rgba(0,0,0,0.5); width: 450px; }
+        h2 { text-align: center; margin-top: 0; border-bottom: 2px solid #555; padding-bottom: 10px; }
+        h3 { font-size: 14px; color: #aaa; margin-top: 25px; margin-bottom: 10px; border-bottom: 1px solid #444; padding-bottom: 5px; }
+        .form-group { margin-bottom: 15px; }
+        label { display: block; margin-bottom: 5px; font-weight: bold; font-size: 14px; }
+        input[type="text"], input[type="number"], select { width: 100%; padding: 8px; border: 1px solid #555; border-radius: 5px; background: #111; color: #fff; box-sizing: border-box; }
+        input[type="color"] { width: 100%; height: 35px; border: none; cursor: pointer; background: transparent; }
+        
+        /* สไตล์ปุ่ม */
+        button { width: 100%; padding: 12px; color: white; border: none; border-radius: 5px; font-size: 16px; font-weight: bold; cursor: pointer; transition: 0.2s; }
+        .btn-copy { background: #17a2b8; }
+        .btn-copy:hover { background: #138496; }
+        .btn-preview { background: #007bff; }
+        .btn-preview:hover { background: #0056b3; }
+        
+        .flex-row { display: flex; gap: 10px; }
+        .flex-row .form-group { flex: 1; }
+        .button-group { display: flex; gap: 10px; margin-top: 25px; }
+    </style>
+</head>
+<body>
+
+    <div class="control-box">
+        <h2>⚙️ Map Overlay Settings</h2>
+        
+        <h3>1. TOURNAMENT SETTINGS</h3>
+        <div class="form-group">
+            <label>Tournament ID:</label>
+            <input type="text" id="tournamentId" value="eu-pecsp2">
+        </div>
+
+        <h3>2. & 3. COLOR SETTINGS</h3>
+        <div class="flex-row">
+            <div class="form-group">
+                <label>Alive Color:</label>
+                <input type="color" id="aliveColor" value="#ffffff">
+            </div>
+            <div class="form-group">
+                <label>Knocked Color:</label>
+                <input type="color" id="groggyColor" value="#ff4c4c">
+            </div>
+            <div class="form-group">
+                <label>Dead Color:</label>
+                <input type="color" id="deadColor" value="#888888">
+            </div>
+        </div>
+        <div class="form-group">
+            <label>Team Logo Background:</label>
+            <input type="color" id="logoBgColor" value="#0d0628">
+        </div>
+
+        <h3>4. LAYOUT & POSITION</h3>
+        <div class="form-group">
+            <label>Sidebar Width (px):</label>
+            <input type="number" id="boxWidth" value="420">
+        </div>
+        <div class="flex-row">
+            <div class="form-group">
+                <label>Offset X (px):</label>
+                <input type="number" id="offsetX" value="0">
+            </div>
+            <div class="form-group">
+                <label>Offset Y (px):</label>
+                <input type="number" id="offsetY" value="0">
+            </div>
+        </div>
+
+        <!-- 📌 แยก 2 ปุ่ม: Copy Link และ Preview -->
+        <div class="button-group">
+            <button id="copyBtn" class="btn-copy" onclick="copyLink()">🔗 Copy OBS Link</button>
+            <button class="btn-preview" onclick="openOverlay()">👁️ Preview Overlay</button>
+        </div>
+    </div>
+
+    <script>
+        // ฟังก์ชันดึงค่าพารามิเตอร์ทั้งหมดที่ตั้งไว้
+        function getOverlayParams() {
+            const tId = document.getElementById('tournamentId').value;
+            const aColor = encodeURIComponent(document.getElementById('aliveColor').value);
+            const gColor = encodeURIComponent(document.getElementById('groggyColor').value);
+            const dColor = encodeURIComponent(document.getElementById('deadColor').value);
+            const lColor = encodeURIComponent(document.getElementById('logoBgColor').value);
+            const width = document.getElementById('boxWidth').value;
+            const ox = document.getElementById('offsetX').value;
+            const oy = document.getElementById('offsetY').value;
+            
+            return `?tournament_id=${tId}&api_mode=live&alive_bg=${aColor}&groggy_bg=${gColor}&dead_bg=${dColor}&logo_bg=${lColor}&width=${width}&ox=${ox}&oy=${oy}`;
+        }
+
+        // ปุ่มก๊อปปี้ลิงก์ (เปลี่ยนเป็น Full URL อัตโนมัติเพื่อให้ลง OBS ได้เลย)
+        function copyLink() {
+            const fullUrl = new URL('overlay.html' + getOverlayParams(), window.location.href).href;
+            
+            navigator.clipboard.writeText(fullUrl).then(() => {
+                const btn = document.getElementById('copyBtn');
+                btn.innerText = '✅ Link Copied!';
+                btn.style.background = '#28a745'; // เปลี่ยนเป็นสีเขียวชั่วคราว
+                
+                setTimeout(() => { 
+                    btn.innerText = '🔗 Copy OBS Link'; 
+                    btn.style.background = '#17a2b8'; 
+                }, 2000);
+            }).catch(err => {
+                alert("Failed to copy link: " + err);
+            });
+        }
+
+        // ปุ่มเปิดดูตัวอย่าง
+        function openOverlay() {
+            const overlayUrl = 'overlay.html' + getOverlayParams();
+            window.open(overlayUrl, '_blank', 'width=1920,height=1080');
+        }
+    </script>
+
+</body>
+</html>

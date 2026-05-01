@@ -1,0 +1,352 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>PUBG Map Real-time Overlay</title>
+    <style>
+        /*[cite: 2] */
+        @font-face {
+            font-family: 'Transducer Condensed Medium';
+            src: url('Transducer-CondensedMedium.otf') format('opentype');
+        }
+
+        :root {
+            --sidebar-width: 420px;
+            --offset-x: 0px;
+            --offset-y: 0px;
+            --logo-bg: #0d0628;
+        }
+
+        body { 
+            margin: 0; padding: 0; width: 1920px; height: 1080px; 
+            overflow: hidden; 
+            font-family: 'Transducer Condensed Medium', 'Arial', sans-serif; 
+            background: transparent; position: relative;
+        }
+        
+        .overlay-container { 
+            display: flex; justify-content: space-between; 
+            width: 100%; height: 100%; box-sizing: border-box; 
+            padding: var(--offset-y) var(--offset-x); 
+        }
+
+        .sidebar { 
+            width: var(--sidebar-width); 
+            display: flex; flex-direction: column; height: 100%; gap: 0; 
+        }
+
+        .team-card { 
+            display: flex; flex: 1; box-sizing: border-box; border-bottom: 2px solid #000; 
+            max-height: 12.5%;
+        }
+        .team-card:last-child { border-bottom: none; }
+        .team-card.right { flex-direction: row-reverse; }
+
+        .logo-box { 
+            width: 115px; 
+            display: flex; flex-direction: column; 
+            justify-content: center; align-items: center; 
+            background-color: var(--logo-bg);
+            color: #fff; font-weight: 900; box-sizing: border-box;
+        }
+        .logo-img { 
+            width: 75px; height: 75px; 
+            margin-bottom: 4px; 
+            background-size: contain; 
+            background-repeat: no-repeat; 
+            background-position: center; 
+        }
+        
+        .team-tag { font-size: 26px; text-transform: uppercase; text-align: center; color: white; line-height: 1; letter-spacing: 1px;}
+
+        .players-box { 
+            flex-grow: 1; display: flex; flex-direction: column; 
+            width: calc(var(--sidebar-width) - 115px); 
+        }
+        
+        .player-row { 
+            flex: 1; display: flex; align-items: center; padding: 0 15px; 
+            border-bottom: 1px solid #bbb; 
+            font-weight: normal;
+            font-size: 20px;
+            letter-spacing: 0.5px;
+            box-sizing: border-box; width: 100%;
+            white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+        }
+        .player-row:last-child { border-bottom: none; }
+        
+        .team-card.right .player-row { border-right: 3px solid #111; border-left: none; justify-content: flex-end; }
+        .team-card:not(.right) .player-row { border-left: 3px solid #111; border-right: none; justify-content: flex-start; }
+
+        .bottom-bar {
+            position: absolute; 
+            bottom: var(--offset-y); 
+            left: 50%; transform: translateX(-50%);
+            display: flex; background-color: var(--logo-bg);
+            border: 2px solid #000;
+            border-bottom: none; color: #fff; 
+            padding: 5px 10px; border-radius: 8px 8px 0 0; 
+        }
+        .status-item { 
+            display: flex; align-items: center; 
+            padding: 5px 25px; border-right: 2px solid #000; 
+        }
+        .status-item:last-child { border-right: none; }
+        
+        .status-label { color: #ccc; margin-right: 15px; font-size: 18px; }
+        .status-icon { margin-right: 15px; color: #fff; font-size: 14px;}
+        .status-value { font-size: 26px; font-weight: bold; } 
+
+    </style>
+</head>
+<body>
+
+    <div class="overlay-container">
+        <div class="sidebar left" id="sidebar-left"></div>
+        <div class="sidebar right" id="sidebar-right"></div>
+    </div>
+
+    <div class="bottom-bar">
+        <div class="status-item">
+            <span class="status-label">TEAMS</span><span class="status-icon">▶▶</span>
+            <span class="status-value" id="teams-alive">0</span>
+        </div>
+        <div class="status-item">
+            <span class="status-label">ALIVE</span><span class="status-icon">▶▶</span>
+            <span class="status-value" id="players-alive">0</span>
+        </div>
+        <div class="status-item">
+            <span class="status-label">PHASE</span><span class="status-icon">▶▶</span>
+            <span class="status-value" id="match-phase">1</span>
+        </div>
+        <div class="status-item">
+            <span class="status-label">TIME</span><span class="status-icon">▶▶</span>
+            <span class="status-value" id="match-time">00:00</span>
+        </div>
+    </div>
+
+    <script>
+        const urlParams = new URLSearchParams(window.location.search);
+        
+        const overlayWidth = urlParams.get('width') || '420';
+        const offsetX = urlParams.get('ox') || '0';
+        const offsetY = urlParams.get('oy') || '0';
+        const logoBgColor = urlParams.get('logo_bg') || '#0d0628';
+
+        document.documentElement.style.setProperty('--sidebar-width', `${overlayWidth}px`);
+        document.documentElement.style.setProperty('--offset-x', `${offsetX}px`);
+        document.documentElement.style.setProperty('--offset-y', `${offsetY}px`);
+        document.documentElement.style.setProperty('--logo-bg', logoBgColor);
+
+        const tournamentId = urlParams.get('tournament_id') || 'sea-ptsg1';
+        const apiMode = urlParams.get('api_mode') || 'live';
+        const aliveColor = urlParams.get('alive_bg') || '#ffffff';
+        const groggyColor = urlParams.get('groggy_bg') || '#ff4c4c'; // 📌 สีล้ม (แดง)
+        const deadColor = urlParams.get('dead_bg') || '#888888';
+        const accountId = 'nattapon7799'; 
+        
+        let currentMatchTime = 0;
+        let timerInterval = null;
+
+        const apiUrl = `https://domestic.atum.live/api/pubg/liveleaderboard?account_id=${accountId}&series=${tournamentId}&tournament_id=${tournamentId}&mode=${apiMode}`;
+
+        function formatTime(seconds) {
+            const m = Math.floor(seconds / 60).toString().padStart(2, '0');
+            const s = (Math.floor(seconds) % 60).toString().padStart(2, '0');
+            return `${m}:${s}`;
+        }
+
+        function startLocalTimer(initialSeconds) {
+            if (timerInterval) clearInterval(timerInterval);
+            currentMatchTime = initialSeconds;
+            
+            timerInterval = setInterval(() => {
+                currentMatchTime++;
+                document.getElementById('match-time').innerText = formatTime(currentMatchTime);
+                document.getElementById('match-phase').innerText = calculatePhaseByTime(currentMatchTime);
+            }, 1000);
+        }
+
+        function calculatePhaseByTime(sec) {
+            if (sec < 600) return 1;
+            if (sec < 840) return 2;
+            if (sec < 1020) return 3;
+            if (sec < 1200) return 4;
+            if (sec < 1380) return 5;
+            if (sec < 1530) return 6;
+            if (sec < 1680) return 7;
+            if (sec < 1800) return 8;
+            return 9;
+        }
+
+        function buildTeamHTML(team, isRight, displayPlayers) {
+            let playersHtml = '';
+            for (let i = 0; i < 4; i++) {
+                let p = displayPlayers[i];
+                if (p) {
+                    let bg;
+                    let textCol = '#000000'; // 📌 บังคับตัวหนังสือสีดำเสมอ
+                    
+                    // 📌 ลำดับความสำคัญ: ล้ม -> ตาย -> รอด
+                    if (p.isGroggy === true || p.isGroggy === "true") {
+                        bg = groggyColor; // ถ้าล้มให้พื้นแดงไว้ก่อน
+                    } else if (p.isAlive === false || p.isAlive === "false") {
+                        bg = deadColor;   // ถ้าตายสนิทให้เทา
+                    } else {
+                        bg = aliveColor;  // ถ้ารอดให้ขาว
+                    }
+                    
+                    let shortName = p.name;
+                    let prefix = team.team_tag + '_';
+                    if (shortName.toUpperCase().startsWith(prefix.toUpperCase())) {
+                        shortName = shortName.substring(prefix.length);
+                    }
+
+                    playersHtml += `
+                        <div class="player-row" style="background-color: ${bg}; color: ${textCol};">
+                            <span>${shortName}</span>
+                        </div>`;
+                } else {
+                    playersHtml += `<div class="player-row" style="background-color: ${deadColor};"></div>`;
+                }
+            }
+
+            let cardClass = isRight ? 'team-card right' : 'team-card';
+            let logoUrl = `http://localhost/MAP%20LOGO/${team.team_logo}.png`;
+
+            return `
+                <div class="${cardClass}">
+                    <div class="logo-box">
+                        <div class="logo-img" style="background-image: url('${logoUrl}');"></div>
+                        <div class="team-tag">${team.team_tag}</div>
+                    </div>
+                    <div class="players-box">
+                        ${playersHtml}
+                    </div>
+                </div>
+            `;
+        }
+
+        function updateOverlay(data) {
+            let teams = data.teams || [];
+            
+            teams.sort((a, b) => a.team_tag.localeCompare(b.team_tag));
+            let displayTeams = teams.slice(0, 16);
+
+            let leftHTML = '';
+            let rightHTML = '';
+            let totalPlayersAlive = 0;
+            let totalTeamsAlive = 0;
+
+            displayTeams.forEach((team, index) => {
+                
+                if (team.players && team.players.length > 0) {
+                    team.players.sort((a, b) => a.name.localeCompare(b.name));
+                }
+
+                let displayPlayers = team.players ? team.players.slice(0, 4) : [];
+
+                // 📌 จัดการสถานะตายชัวร์
+                displayPlayers.forEach(p => {
+                    if (p) {
+                        // ถ้ามีเวลาตายบันทึกแล้ว = ตายสนิท
+                        if (p.eliminatedAt && p.eliminatedAt > 0) {
+                            p.isAlive = false;
+                            p.isGroggy = false; // ปลดสถานะล้ม
+                        }
+                        // ถ้าเลือด 0 และไม่ล้ม = ตายสนิท
+                        if (p.health <= 0 && p.isGroggy === false) {
+                            p.isAlive = false;
+                        }
+                    }
+                });
+
+                // 📌 ทีมจะยังรอดอยู่ ถ้ามีใครซักคน isAlive หรือ isGroggy
+                let isTeamAlive = displayPlayers.some(p => p && (p.isAlive === true || p.isGroggy === true));
+
+                // 📌 ถ้า API ระบุว่าทีมตายยกตี้ ค่อยตายหมด
+                if (team.elimination === true || team.elimination === "true") {
+                    isTeamAlive = false;
+                }
+
+                if (!isTeamAlive) {
+                    displayPlayers.forEach(p => {
+                        if (p) {
+                            p.isAlive = false;
+                            p.isGroggy = false; // เคลียร์อาการน็อคค้าง
+                        }
+                    });
+                } else {
+                    totalTeamsAlive++;
+                }
+
+                displayPlayers.forEach(p => {
+                    // นับคนรอด (รวมคนที่ล้มอยู่ด้วย)
+                    if (p && (p.isAlive === true || p.isGroggy === true)) {
+                        totalPlayersAlive++;
+                    }
+                });
+
+                if (index < 8) {
+                    leftHTML += buildTeamHTML(team, false, displayPlayers);
+                } else if (index < 16) {
+                    rightHTML += buildTeamHTML(team, true, displayPlayers);
+                }
+            });
+
+            const leftSidebar = document.getElementById('sidebar-left');
+            const rightSidebar = document.getElementById('sidebar-right');
+            
+            if (leftSidebar.innerHTML !== leftHTML) {
+                leftSidebar.innerHTML = leftHTML;
+            }
+            if (rightSidebar.innerHTML !== rightHTML) {
+                rightSidebar.innerHTML = rightHTML;
+            }
+
+            document.getElementById('teams-alive').innerText = totalTeamsAlive;
+            document.getElementById('players-alive').innerText = totalPlayersAlive;
+            
+            if (totalTeamsAlive <= 1) {
+                if (timerInterval) {
+                    clearInterval(timerInterval);
+                    timerInterval = null;
+                }
+                if (data.duration !== undefined) {
+                    currentMatchTime = data.duration;
+                    document.getElementById('match-time').innerText = formatTime(data.duration);
+                }
+            } else {
+                if (data.duration !== undefined) {
+                    if (!timerInterval || Math.abs(currentMatchTime - data.duration) > 3) {
+                        startLocalTimer(data.duration);
+                    }
+                }
+            }
+
+            let apiPhase = data.phase || 0;
+            if (apiPhase > 0) {
+                document.getElementById('match-phase').innerText = apiPhase;
+            } else {
+                document.getElementById('match-phase').innerText = calculatePhaseByTime(currentMatchTime);
+            }
+        }
+
+        async function fetchLiveData() {
+            try {
+                const response = await fetch(apiUrl);
+                const json = await response.json();
+                if (json.data) {
+                    updateOverlay(json.data);
+                }
+            } catch (error) {
+                console.error("Error fetching PUBG data:", error);
+            }
+        }
+
+        fetchLiveData();
+        setInterval(fetchLiveData, 1000);
+    </script>
+</body>
+</html>
